@@ -30,6 +30,21 @@
 
 ---
 
+## Installation Summary
+
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/0xB455/dns-digger.git
+    cd dns-digger
+    ```
+2. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. Run the tool in either DNS or Mail mode using the examples above.
+
+---
+
 ## Usage
 
 DNS Digger uses a subcommand interface with two main modes: **DNS** and **Mail**.
@@ -121,21 +136,6 @@ DNS Digger is especially useful for penetration testers and offensive security p
 
 - **Python 3.x**
 - **dnspython** (installed via `requirements.txt`)
-
----
-
-## Installation Summary
-
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/0xB455/dns-digger.git
-    cd dns-digger
-    ```
-2. Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3. Run the tool in either DNS or Mail mode using the examples above.
 
 ---
 
