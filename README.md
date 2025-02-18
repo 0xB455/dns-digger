@@ -128,7 +128,7 @@ DNS Digger is especially useful for penetration testers and offensive security p
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/dns-digger.git
+    git clone https://github.com/0xB455/dns-digger.git
     cd dns-digger
     ```
 2. Install dependencies:
