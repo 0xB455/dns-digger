@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-DNS Digger v1.0 - Comprehensive DNS & Mail Record Lookup for offensive purposes.
+DNS Digger v1.1 - Comprehensive DNS & Mail Record Lookup for offensive purposes.
 
 Usage Examples:
 
   # DNS Mode
   python3 dns-digger.py dns example.com --verbose
-  python3 dns-digger.py dns -iL domainlist.txt
+  python3 dns-digger.py dns -iL domainlist.txt --recursive
 
   # Mail Mode
   python3 dns-digger.py mail example.com --validate
-  python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out ll.txt
+  python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out ll.txt --recursive
 
 Description:
   This script supports two subcommands:
@@ -19,16 +19,11 @@ Description:
     2) mail - perform email-related lookups (MX, SPF, DMARC, DKIM, TLSA, etc.)
               and optionally attempt server validation or spoofing tests.
 
-Options:
-  --verbose       Show detailed output for each query (DNS or Mail).
-  --out FILE      Write all non-ephemeral output to the specified file.
-
-Mail-specific Options:
-  --validate      Validate discovered mail servers on ports 25, 465, 587, 2525.
-  --spoof         Attempt to spoof an email from doesnotexist1@domain to doesnotexist2@domain.
-  --multi         In spoof mode, re-test each discovered mail server for *all* domains from the input file.
-  --quiet         Suppress detailed mail output; show only summary and ephemeral updates.
-
+New Feature:
+  --recursive   If set, any domain-like references found in record data (e.g., SPF strings)
+                will be recursively queried in the same mode (DNS or Mail).
+                Only subdomains (or the exact apex) of the primary domain(s) from the input 
+                are considered for recursion, so IP addresses won't trigger recursion.
 """
 
 import sys
@@ -51,6 +46,12 @@ from dns_record_types import DNS_RECORDS, CATEGORY_MAP, ORDERED_CATEGORIES
 
 # Global file handle for logging
 OUTPUT_FILE = None
+
+# Global visited set to avoid infinite recursion
+visited_domains: Set[str] = set()
+
+# Global set of apex domains that recursion is allowed for
+allowed_apex_domains: Set[str] = set()
 
 ###############################################################################
 # Utility / Logging
@@ -75,6 +76,45 @@ def log_output(message: str, end: str = "\n") -> None:
         OUTPUT_FILE.flush()
 
 NormalizedRecord = Tuple[str, str]  # (record_type, record_value)
+
+###############################################################################
+# Domain Extraction for Recursive Mode
+###############################################################################
+
+def ends_with_allowed_apex(candidate: str) -> bool:
+    """
+    Returns True if 'candidate' ends with any of the allowed_apex_domains
+    or is exactly one of them. Everything else is excluded from recursion.
+    Example:
+      allowed_apex_domains = {"vodafone.com"}
+      Then "sub.vodafone.com" or "vodafone.com" is allowed. 
+      "47.73.65.141" or "otherdomain.com" is not.
+    """
+    candidate = candidate.lower().rstrip(".")
+    for apex in allowed_apex_domains:
+        apex = apex.lower().rstrip(".")
+        if candidate == apex:
+            return True
+        if candidate.endswith("." + apex):
+            return True
+    return False
+
+def extract_potential_domains(record_text: str) -> List[str]:
+    """
+    Attempt to find domain-like strings in the given text.
+    This is a simple regex that looks for typical domain patterns.
+    Only return matches that end with an allowed apex domain.
+    (IP addresses won't match because they don't have a top-level domain.)
+    """
+    pattern = re.compile(r"([a-zA-Z0-9-_]+\.[a-zA-Z0-9-.]+)", re.IGNORECASE)
+    raw_candidates = pattern.findall(record_text)
+    results = []
+    for ref in raw_candidates:
+        candidate = ref.lower().strip(".")
+        # Filter out anything not in the allowed apex domain set
+        if ends_with_allowed_apex(candidate):
+            results.append(candidate)
+    return results
 
 ###############################################################################
 # DNS Query Functions
@@ -151,7 +191,14 @@ def expand_cidr(cidr_str: str) -> List[str]:
 # DNS Mode: Subcommand Handlers
 ###############################################################################
 
-def process_dns_domain(domain: str, verbose: bool) -> None:
+def process_dns_domain(domain: str, verbose: bool, recursive: bool) -> None:
+    """
+    Perform a DNS enumeration for one domain.
+    If recursive is True, parse results for subdomains and re-query them 
+    (only if they end with allowed apex domains).
+    """
+    visited_domains.add(domain.lower())
+
     header = f";; Processing domain: {domain} (DNS Mode)"
     log_output("\n" + "=" * len(header))
     log_output(header)
@@ -207,6 +254,18 @@ def process_dns_domain(domain: str, verbose: bool) -> None:
                 log_output(f"{rec[0]}: {rec[1]}")
             log_output("")
 
+    # If recursive, parse subdomain references from final_results
+    if recursive:
+        discovered_subdomains: List[str] = []
+        for (rectype, rectext) in final_results:
+            possible_refs = extract_potential_domains(rectext)
+            for ref in possible_refs:
+                if ref not in visited_domains:
+                    discovered_subdomains.append(ref)
+
+        for subd in discovered_subdomains:
+            process_dns_domain(subd, verbose, recursive)
+
 ###############################################################################
 # Mail Mode: Subcommand Handlers
 ###############################################################################
@@ -233,6 +292,7 @@ def process_mail_records(records: List[NormalizedRecord], quiet: bool = False) -
                     ips = {r.to_text().strip() for r in answers}
                     targets.update(ips)
                     if not quiet:
+                        # Sort IP addresses numerically
                         for ip in sorted(ips, key=lambda ip: tuple(int(part) for part in ip.split('.'))):
                             log_output(f"    A: {ip}")
                 except Exception as e:
@@ -434,10 +494,13 @@ def spoof_mail_servers(targets: Set[str], domain: str, quiet: bool,
             log_output(f"STATUS: Finished spoofing {ip} in {time.time() - start_ip:.1f} seconds.")
 
 def process_mail_domain(domain: str, verbose: bool, validate_mode: bool, spoof_mode: bool,
-                        quiet: bool, multi_spoof_list: Optional[List[str]]) -> None:
+                        quiet: bool, multi_spoof_list: Optional[List[str]], recursive: bool = False) -> None:
     """
     Query DNS for mail records, gather targets, and optionally run validate/spoof checks.
+    If recursive is True, parse discovered text for subdomains to re-check (only if they end with allowed apex domains).
     """
+    visited_domains.add(domain.lower())
+
     header = f";; Processing domain: {domain} (MAIL Mode)"
     log_output("\n" + "=" * len(header))
     log_output(header)
@@ -492,12 +555,24 @@ def process_mail_domain(domain: str, verbose: bool, validate_mode: bool, spoof_m
 
     # Validate or Spoof?
     if spoof_mode:
-        spoof_mail_servers(targets, domain, quiet, multi_domains=multi_spoof_list)
+        spoof_mail_servers(targets, domain, quiet, multi_spoof_list)
     elif validate_mode:
         validate_mail_servers(targets, quiet)
 
     if quiet:
         log_output(f"\nSTATUS: Total targets to be checked: {len(targets)}")
+
+    # If recursive, parse subdomain references from final_results
+    if recursive:
+        discovered_subdomains: List[str] = []
+        for (rectype, rectext) in final_results:
+            possible_refs = extract_potential_domains(rectext)
+            for ref in possible_refs:
+                if ref not in visited_domains:
+                    discovered_subdomains.append(ref)
+
+        for subd in discovered_subdomains:
+            process_mail_domain(subd, verbose, validate_mode, spoof_mode, quiet, multi_spoof_list, recursive=True)
 
 ###############################################################################
 # Main (Subcommand Parsing)
@@ -505,6 +580,7 @@ def process_mail_domain(domain: str, verbose: bool, validate_mode: bool, spoof_m
 
 def main():
     global OUTPUT_FILE
+    global allowed_apex_domains
 
     parser = argparse.ArgumentParser(
         description="DNS Digger v1.0 - Comprehensive DNS & Mail Record Lookup for offensive purposes",
@@ -522,6 +598,7 @@ def main():
 
     dns_parser.add_argument("--verbose", action="store_true", help="Show detailed DNS output for each query.")
     dns_parser.add_argument("--out", dest="outfile", help="File to write output to.")
+    dns_parser.add_argument("--recursive", action="store_true", help="If set, parse discovered records for subdomains and re-query them.")
 
     # -------------------------------------------------------------------------
     # MAIL SUBCOMMAND
@@ -537,10 +614,10 @@ def main():
     mail_parser.add_argument("--multi", action="store_true", help="(Spoof mode) Re-test each discovered mail server for *all* domains.")
     mail_parser.add_argument("--quiet", action="store_true", help="Suppress detailed mail output; show only summary.")
     mail_parser.add_argument("--out", dest="outfile", help="File to write output to.")
+    mail_parser.add_argument("--recursive", action="store_true", help="If set, parse discovered records for subdomains and re-query them.")
 
     args = parser.parse_args()
 
-    # If no subcommand is specified, print help
     if not args.subcommand:
         parser.print_help()
         sys.exit(1)
@@ -553,6 +630,11 @@ def main():
             print(f"Error opening output file: {e}")
             sys.exit(1)
 
+    verbose = getattr(args, "verbose", False)
+    recursive = getattr(args, "recursive", False)
+
+    all_input_domains: List[str] = []
+
     # -------------------------------------------------------------------------
     # DNS Subcommand Logic
     # -------------------------------------------------------------------------
@@ -560,21 +642,31 @@ def main():
         if args.input_list:
             try:
                 with open(args.input_list, "r") as infile:
-                    domains = [line.strip() for line in infile if line.strip() and not line.strip().startswith("#")]
+                    domain_lines = [line.strip() for line in infile if line.strip() and not line.strip().startswith("#")]
             except Exception as e:
                 status_update(f"Error reading input list file: {e}")
                 sys.exit(1)
+
             # Decorative output for loaded domains
-            line = f";; Loaded {len(domains)} domains from {args.input_list} for DNS checks."
+            line = f";; Loaded {len(domain_lines)} domains from {args.input_list} for DNS checks."
             border = "=" * len(line)
             log_output("\n" + border)
             log_output(line)
             log_output(border + "\n")
-        else:
-            domains = [args.domain]
 
-        for dom in domains:
-            process_dns_domain(dom, args.verbose)
+            all_input_domains.extend(domain_lines)
+        else:
+            all_input_domains.append(args.domain)
+
+        # Populate allowed_apex_domains from these input domains
+        for d in all_input_domains:
+            allowed_apex_domains.add(d.lower().rstrip("."))
+
+        # Process them
+        for dom in all_input_domains:
+            d_l = dom.lower().strip(".")
+            if d_l not in visited_domains:
+                process_dns_domain(d_l, verbose, recursive)
 
     # -------------------------------------------------------------------------
     # MAIL Subcommand Logic
@@ -583,29 +675,39 @@ def main():
         if args.input_list:
             try:
                 with open(args.input_list, "r") as infile:
-                    domains = [line.strip() for line in infile if line.strip() and not line.strip().startswith("#")]
+                    domain_lines = [line.strip() for line in infile if line.strip() and not line.strip().startswith("#")]
             except Exception as e:
                 status_update(f"Error reading input list file: {e}")
                 sys.exit(1)
+
             # Decorative output for loaded domains
-            line = f";; Loaded {len(domains)} domains from {args.input_list} for Mail checks."
+            line = f";; Loaded {len(domain_lines)} domains from {args.input_list} for Mail checks."
             border = "=" * len(line)
             log_output("\n" + border)
             log_output(line)
             log_output(border + "\n")
-        else:
-            domains = [args.domain]
 
-        for dom in domains:
-            multi_spoof_list = domains if args.multi else None
-            process_mail_domain(
-                domain=dom,
-                verbose=args.verbose,
-                validate_mode=args.validate,
-                spoof_mode=args.spoof,
-                quiet=args.quiet,
-                multi_spoof_list=multi_spoof_list
-            )
+            all_input_domains.extend(domain_lines)
+        else:
+            all_input_domains.append(args.domain)
+
+        # Populate allowed_apex_domains
+        for d in all_input_domains:
+            allowed_apex_domains.add(d.lower().rstrip("."))
+
+        for dom in all_input_domains:
+            d_l = dom.lower().strip(".")
+            if d_l not in visited_domains:
+                multi_spoof_list = all_input_domains if getattr(args, "multi", False) else None
+                process_mail_domain(
+                    domain=d_l,
+                    verbose=verbose,
+                    validate_mode=getattr(args, "validate", False),
+                    spoof_mode=getattr(args, "spoof", False),
+                    quiet=getattr(args, "quiet", False),
+                    multi_spoof_list=multi_spoof_list,
+                    recursive=recursive
+                )
 
     if OUTPUT_FILE is not None:
         OUTPUT_FILE.close()
