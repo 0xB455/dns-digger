@@ -10,7 +10,7 @@ Usage Examples:
 
   # Mail Mode
   python3 dns-digger.py mail example.com --validate
-  python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out ll.txt --recursive
+  python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out out-file.txt --recursive
 
 Description:
   This script supports two subcommands:
@@ -86,8 +86,8 @@ def ends_with_allowed_apex(candidate: str) -> bool:
     Returns True if 'candidate' ends with any of the allowed_apex_domains
     or is exactly one of them. Everything else is excluded from recursion.
     Example:
-      allowed_apex_domains = {"vodafone.com"}
-      Then "sub.vodafone.com" or "vodafone.com" is allowed. 
+      allowed_apex_domains = {"example.com"}
+      Then "sub.example.com" or "example.com" is allowed. 
       "47.73.65.141" or "otherdomain.com" is not.
     """
     candidate = candidate.lower().rstrip(".")
