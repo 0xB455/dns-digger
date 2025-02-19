@@ -24,9 +24,14 @@
 - **Bulk Domain Support:**  
   Process a single domain or a list of domains (via an input file), with a decorative banner showing the number of domains loaded.
 
+- **Recursive Mode:**  
+  When `--recursive` is enabled, any newly discovered subdomains (within the same apex domain(s)) are automatically re‐queried in the current mode (DNS or Mail). This can reveal additional mail servers or DNS entries not visible at first glance.
+
+  > **Performance Note:** Recursive lookups in **Mail** mode can be **time‐consuming**, since each newly discovered subdomain can be probed for mail records and spoof/validation checks. Use with caution on large domain sets.
+
 - **Subcommand Interface:**  
   - **`dns` Subcommand:** For standard DNS record lookups.
-  - **`mail` Subcommand:** For mail-related lookups and vulnerability tests.
+  - **`mail` Subcommand:** For mail‐related lookups and vulnerability tests.
 
 ---
 
@@ -41,7 +46,7 @@
     ```bash
     pip install -r requirements.txt
     ```
-3. Run the tool in either DNS or Mail mode using the examples above.
+3. Run the tool in either DNS or Mail mode using the examples below (or with your own parameters).
 
 ---
 
@@ -68,6 +73,13 @@ python3 dns-digger.py dns -iL domainlist.txt
 ```
 
 When using `-iL`, the tool displays a decorative banner indicating the number of domains loaded before processing them.
+
+**Example 3: Recursive DNS Lookups
+```bash
+python3 dns-digger.py dns example.com --recursive
+```
+
+Any subdomains of `example.com` discovered in DNS records will also be queried automatically. This helps reveal deeper DNS structures not visible from a single pass.
 
 ### Mail Mode
 
@@ -103,6 +115,16 @@ python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out resu
 
 After reading the input list, DNS Digger will display a decorative banner showing how many domains were loaded, then process each domain accordingly.
 
+**Example 4: Recursive Mail Lookups
+```bash
+python3 dns-digger.py mail -iL input-list.txt --spoof --recursive
+```
+
+- Discovers subdomains for all apex domains in input-list.txt.
+- Checks mail‐related records (MX, SPF, DMARC, etc.) for each subdomain.
+- Attempts spoof/validation on each newly discovered subdomain’s mail servers.
+- **Caution:** Can result in long runtimes if the domain list is large or if many subdomains exist, as each subdomain may trigger multiple DNS queries and SMTP checks.
+
 ---
 
 ## How It Works
@@ -116,6 +138,9 @@ After reading the input list, DNS Digger will display a decorative banner showin
 3. **SMTP Validation & Spoofing Test:**  
    - **Validation:** Connects to identified mail servers on common SMTP ports to retrieve banner information and verify connectivity.
    - **Spoofing Test:** Simulates an SMTP session using non-existent email addresses to see if the server will accept spoofed messages, revealing potential vulnerabilities.
+
+4. **Recursive Subdomain Lookups (Optional):
+   When `--recursive` is enabled, any discovered subdomain references that match the apex domain(s) are re‐queried. This is true for both DNS and Mail subcommands, allowing you to reveal deeper tiers of DNS records and mail servers not visible from a single pass.
 
 This dual approach not only maps out DNS and mail infrastructures but also creatively probes for misconfigurations and vulnerabilities.
 
