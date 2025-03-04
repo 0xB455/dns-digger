@@ -74,7 +74,7 @@ python3 dns-digger.py dns -iL domainlist.txt
 
 When using `-iL`, the tool displays a decorative banner indicating the number of domains loaded before processing them.
 
-**Example 3: Recursive DNS Lookups
+**Example 3: Recursive DNS Lookups**
 ```bash
 python3 dns-digger.py dns example.com --recursive
 ```
