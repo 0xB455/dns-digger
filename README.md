@@ -139,7 +139,7 @@ python3 dns-digger.py mail -iL input-list.txt --spoof --recursive
    - **Validation:** Connects to identified mail servers on common SMTP ports to retrieve banner information and verify connectivity.
    - **Spoofing Test:** Simulates an SMTP session using non-existent email addresses to see if the server will accept spoofed messages, revealing potential vulnerabilities.
 
-4. **Recursive Subdomain Lookups (Optional):
+4. **Recursive Subdomain Lookups (Optional):**
    When `--recursive` is enabled, any discovered subdomain references that match the apex domain(s) are re‐queried. This is true for both DNS and Mail subcommands, allowing you to reveal deeper tiers of DNS records and mail servers not visible from a single pass.
 
 This dual approach not only maps out DNS and mail infrastructures but also creatively probes for misconfigurations and vulnerabilities.
