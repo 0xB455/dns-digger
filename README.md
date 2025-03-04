@@ -167,8 +167,3 @@ DNS Digger is especially useful for penetration testers and offensive security p
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
-
-*Happy Digin'!*
-```
