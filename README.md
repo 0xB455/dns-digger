@@ -115,7 +115,7 @@ python3 dns-digger.py mail -iL input-list.txt --spoof --multi --quiet --out resu
 
 After reading the input list, DNS Digger will display a decorative banner showing how many domains were loaded, then process each domain accordingly.
 
-**Example 4: Recursive Mail Lookups
+**Example 4: Recursive Mail Lookups**
 ```bash
 python3 dns-digger.py mail -iL input-list.txt --spoof --recursive
 ```
