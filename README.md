@@ -1,4 +1,4 @@
-# DNS Digger v1.1
+# DNS Digger v0.2
 
 **DNS Digger** is a comprehensive DNS and Mail Record Lookup tool designed for offensive security assessments and penetration testing. It automates the enumeration of DNS records and creatively identifies mail servers, while also testing them for vulnerabilities such as spoofing. This tool is useful for mapping target infrastructures and discovering misconfigurations in email services.
 
