@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DNS Digger v1.1 - Comprehensive DNS & Mail Record Lookup for offensive purposes.
+DNS Digger - Comprehensive DNS & Mail Record Lookup for offensive purposes.
 
 Usage Examples:
 
@@ -583,7 +583,7 @@ def main():
     global allowed_apex_domains
 
     parser = argparse.ArgumentParser(
-        description="DNS Digger v1.1 - Comprehensive DNS & Mail Record Lookup for offensive purposes",
+        description="DNS Digger v0.2 - Comprehensive DNS & Mail Record Lookup for offensive purposes",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Which subcommand to use? (dns or mail)")
